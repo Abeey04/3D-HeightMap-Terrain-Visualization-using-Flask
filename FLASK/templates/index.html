@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Terrain Visualization</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            text-align: center;
+            font-size: 1.8em;
+            font-weight: 500;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            margin-bottom: 25px;
+            font-size: 2em;
+            color: #2c3e50;
+        }
+
+        #upload-form {
+            margin-bottom: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        #upload-form input[type="file"] {
+            margin-bottom: 15px;
+            padding: 8px;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        #upload-form input[type="submit"] {
+            background-color: #2c3e50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background-color 0.3s ease;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        #upload-form input[type="submit"]:hover {
+            background-color: #34495e;
+        }
+
+        #controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 30px;
+            background-color: #ecf0f1;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+            width: 100%;
+            max-width: 600px;
+            box-sizing: border-box;
+        }
+
+        #controls label {
+            font-weight: 500;
+            color: #333;
+        }
+
+        #controls input[type="range"] {
+            margin: 0 10px;
+            -webkit-appearance: none;
+            width: 100%;
+            max-width: 300px;
+            height: 8px;
+            background: #bdc3c7;
+            border-radius: 5px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        #controls input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #2c3e50;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        #controls input[type="checkbox"] {
+            margin-left: 10px;
+            transform: scale(1.2);
+            cursor: pointer;
+        }
+
+        #visualization {
+            width: 100%;
+            max-width: 1200px;
+            height: 70vh;
+            background-color: #fff;
+            border: 1px solid #bdc3c7;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        footer {
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-size: 0.9em;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.5em;
+            }
+
+            #visualization {
+                height: 50vh;
+            }
+
+            #controls {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            #controls label {
+                margin-bottom: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        3D Terrain Visualization
+    </header>
+    <main>
+        <h1>Upload Your DTM File</h1>
+        <form id="upload-form" enctype="multipart/form-data">
+            <input type="file" id="file" name="file" accept=".tif">
+            <input type="submit" value="Upload">
+        </form>
+
+        <div id="controls">
+            <label for="scale">Height Scale Factor: <span id="scale-value">5</span></label>
+            <input type="range" id="scale" min="0.1" max="10" step="0.1" value="5">
+
+            <label for="texture-checkbox">Enable Texture:</label>
+            <input type="checkbox" id="texture-checkbox" checked>
+        </div>
+
+        <div id="visualization"></div>
+    </main>
+    <footer>
+        &copy; 2024 3D Terrain Visualization. All rights reserved.
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script>
+        let terrainMesh, scene, camera, renderer, controls, elevationData, width, height;
+
+        document.getElementById('upload-form').onsubmit = function(event) {
+            event.preventDefault();
+
+            let formData = new FormData();
+            formData.append('file', document.getElementById('file').files[0]);
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                elevationData = new Float32Array(data.elevation_data);
+                width = data.width;
+                height = data.height;
+                visualize(elevationData, width, height, parseFloat(document.getElementById('scale').value));
+            });
+        };
+
+        document.getElementById('scale').oninput = function() {
+            document.getElementById('scale-value').innerText = this.value;
+            if (terrainMesh && elevationData) {
+                updateTerrain(elevationData, width, height, parseFloat(this.value));
+            }
+        };
+
+        document.getElementById('texture-checkbox').onchange = function() {
+            if (terrainMesh) {
+                terrainMesh.material.wireframe = !this.checked;
+                terrainMesh.material.needsUpdate = true;
+            }
+        };
+
+        function visualize(elevationData, width, height, scale) {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('visualization').appendChild(renderer.domElement);
+
+            // Create terrain geometry
+            const aspectRatio = width / height;
+            const geometry = new THREE.PlaneGeometry(60 * aspectRatio, 60, width - 1, height - 1);
+
+            // const geometry = new THREE.PlaneGeometry(60, 60, width - 1, height - 1);
+
+            for (let i = 0; i < elevationData.length; i++) {
+                geometry.attributes.position.array[i * 3 + 2] = elevationData[i] * scale;
+            }
+
+            geometry.computeVertexNormals();
+
+            // Grayish texture color without shininess
+            const textureEnabled = document.getElementById('texture-checkbox').checked;
+            const material = new THREE.MeshLambertMaterial({
+                color: 0xbbbbbb,  // Light gray color
+                wireframe: !textureEnabled
+            });
+
+            terrainMesh = new THREE.Mesh(geometry, material);
+            terrainMesh.rotation.x = -Math.PI / 2;
+            scene.add(terrainMesh);
+
+            const light = new THREE.DirectionalLight(0xffffff, 1);
+            light.position.set(0, 1, 1).normalize();
+            scene.add(light);
+            const ambientLight = new THREE.AmbientLight(0x404040);
+            scene.add(ambientLight);
+
+            camera.position.set(30, 30, 60);
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.update();
+
+            animate();
+        }
+
+        function updateTerrain(elevationData, width, height, scale) {
+            for (let i = 0; i < elevationData.length; i++) {
+                terrainMesh.geometry.attributes.position.array[i * 3 + 2] = elevationData[i] * scale;
+            }
+            terrainMesh.geometry.attributes.position.needsUpdate = true;
+            terrainMesh.geometry.computeVertexNormals();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
